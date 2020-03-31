@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import sleep
 
 
@@ -38,7 +38,8 @@ class HLTV_Crawler:
 
         if len(dates) == 1:
             start_date = datetime.strptime(dates[0], "%b %d %Y")
-            return start_date, start_date
+            end_date = start_date + timedelta(days=1)
+            return start_date, end_date
 
         else:
             start_date = datetime.strptime(dates[0], "%b %d %Y")
@@ -59,6 +60,7 @@ class HLTV_Crawler:
         self.ongoing_events.append([event_name, event_start_date, event_end_date, event_link])
 
     def fetch_ongoing_events(self):
+        self.ongoing_events = []
         soup = self.__fetch_soup()
 
         for event in soup.find("div", attrs={"id": "ALL"}).find_all_next("a", attrs={"class": "a-reset ongoing-event"}):
@@ -71,6 +73,7 @@ class HLTV_Crawler:
         return months
 
     def fetch_upcoming_events(self):
+        self.upcoming_events = []
         months = self.__fetch_upcoming_months()
         for month in months:
             date_year = str(month.find("div", attrs={"class": "standard-headline"}).text).split(" ").pop()
@@ -91,3 +94,11 @@ class HLTV_Crawler:
 crawler = HLTV_Crawler()
 crawler.fetch_ongoing_events()
 crawler.fetch_upcoming_events()
+
+for i in crawler.ongoing_events:
+    print(i)
+
+print()
+
+for i in crawler.upcoming_events:
+    print(i)
