@@ -2,15 +2,27 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
+from pytz import timezone
 from time import sleep
+
+
+class CrawledEvent:
+    def __init__(self, title, start_time, end_time, description, event_id=None):
+        self.title = title
+        self.start_time = start_time
+        self.end_time = end_time
+        self.description = description
+        self.event_id = event_id
+
+    def add_event_id(self, event_id):
+        self.event_id = event_id
 
 
 class HLTV_Crawler:
     def __init__(self):
         self.__hltv_url = "https://www.hltv.org/events#tab-ALL"
         self.__join_url = "https://www.hltv.org"
-        self.ongoing_events = []
-        self.upcoming_events = []
+        self.__timezone = timezone("Europe/Berlin")
 
     def __fetch_soup(self):
         r = requests.get(self.__hltv_url)
@@ -37,13 +49,13 @@ class HLTV_Crawler:
         dates = entire_date.split(" - ")
 
         if len(dates) == 1:
-            start_date = datetime.strptime(dates[0], "%b %d %Y")
+            start_date = self.__timezone.localize(datetime.strptime(dates[0], "%b %d %Y"))
             end_date = start_date + timedelta(days=1)
             return start_date, end_date
 
         else:
-            start_date = datetime.strptime(dates[0], "%b %d %Y")
-            end_date = datetime.strptime(dates[1], "%b %d %Y")
+            start_date = self.__timezone.localize(datetime.strptime(dates[0], "%b %d %Y"))
+            end_date = self.__timezone.localize(datetime.strptime(dates[1], "%b %d %Y"))
             return start_date, end_date
 
     def __fetch_ongoing_event(self, event_in_list):
@@ -55,17 +67,18 @@ class HLTV_Crawler:
         r = requests.get(event_link)
         link_soup = BeautifulSoup(r.text, "html.parser")
         event_date_str = link_soup.find("td", attrs={"class": "eventdate"}).text
-        event_start_date, event_end_date = self.__turn_into_date_obj(event_date_str)
+        start_time, ent_time = self.__turn_into_date_obj(event_date_str)
 
-        self.ongoing_events.append([event_name, event_start_date, event_end_date, event_link])
+        return CrawledEvent(event_name, start_time, ent_time, event_link)
 
     def fetch_ongoing_events(self):
-        self.ongoing_events = []
+        ongoing_events = []
         soup = self.__fetch_soup()
 
         for event in soup.find("div", attrs={"id": "ALL"}).find_all_next("a", attrs={"class": "a-reset ongoing-event"}):
-            self.__fetch_ongoing_event(event)
+            ongoing_events.append(self.__fetch_ongoing_event(event))
             sleep(0.5)
+        return ongoing_events
 
     def __fetch_upcoming_months(self):
         soup = self.__fetch_soup()
@@ -73,7 +86,7 @@ class HLTV_Crawler:
         return months
 
     def fetch_upcoming_events(self):
-        self.upcoming_events = []
+        upcoming_events = []
         months = self.__fetch_upcoming_months()
         for month in months:
             date_year = str(month.find("div", attrs={"class": "standard-headline"}).text).split(" ").pop()
@@ -84,21 +97,17 @@ class HLTV_Crawler:
                     event_date = self.__turn_into_date_obj(event.find_all("span")[2].text + " " + date_year)
                 except AttributeError:
                     event_name = event.find("div", attrs={"class": "big-event-name"}).text
-                    event_date = self.__turn_into_date_obj(event.find("td", attrs={"class": "col-value col-date"}).text + " " + date_year)
+                    event_date = self.__turn_into_date_obj(
+                        event.find("td", attrs={"class": "col-value col-date"}).text + " " + date_year)
 
+                start_time, end_time = event_date
                 event_link = urljoin(self.__join_url, event["href"])
 
-                self.upcoming_events.append([event_name, event_date, event_link])
+                upcoming_events.append(CrawledEvent(event_name, start_time, end_time, event_link))
+        return upcoming_events
+
+    def fetch_all_events(self):
+        return self.fetch_ongoing_events() + self.fetch_upcoming_events()
 
 
 crawler = HLTV_Crawler()
-crawler.fetch_ongoing_events()
-crawler.fetch_upcoming_events()
-
-for i in crawler.ongoing_events:
-    print(i)
-
-print()
-
-for i in crawler.upcoming_events:
-    print(i)
