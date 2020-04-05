@@ -2,8 +2,9 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
-from pytz import timezone
 from time import sleep
+from dependencies.Logger import write_log
+from dependencies.ConfigReader import config
 
 
 class CrawledEvent:
@@ -14,15 +15,12 @@ class CrawledEvent:
         self.description = description
         self.event_id = event_id
 
-    def add_event_id(self, event_id):
-        self.event_id = event_id
-
 
 class HLTV_Crawler:
     def __init__(self):
         self.__hltv_url = "https://www.hltv.org/events#tab-ALL"
         self.__join_url = "https://www.hltv.org"
-        self.__timezone = timezone("Europe/Berlin")
+        self.__timezone = config.timezone
 
     def __fetch_soup(self):
         r = requests.get(self.__hltv_url)
@@ -107,6 +105,7 @@ class HLTV_Crawler:
         return upcoming_events
 
     def fetch_all_events(self):
+        write_log("Crawling all events from hltv.org/events.")
         return self.fetch_ongoing_events() + self.fetch_upcoming_events()
 
 

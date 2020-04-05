@@ -1,38 +1,49 @@
 import pickle
 import os
-from Logger import write_log
+from dependencies.Logger import write_log
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
+from oauthlib.oauth2.rfc6749.errors import InvalidGrantError
 from datetime import datetime
-from HLTVCrawler import CrawledEvent
+from dependencies.HLTVCrawler import CrawledEvent
+from dependencies.ConfigReader import config
 
 
 class Calendar:
     def __init__(self):
         self.__scopes = ["https://www.googleapis.com/auth/calendar"]
-        self.__timezone = "Europe/Berlin"
+        self.__timezone = str(config.timezone)
+        self.client_secret_path = config.client_secret_path
+        self.token_path = os.path.join("dependencies", "token.pkl")
+        self.calendar_id_path = os.path.join("dependencies", "calendarID.txt")
 
-    def __is_already_authenticated(self):
-        if os.path.isfile(".gitignore/token.pkl"):
+    def is_already_authenticated(self):
+        if os.path.isfile(self.token_path):
             return True
         return False
 
     def __load_credentials(self):
-        with open(".gitignore/token.pkl", "rb") as file:
+        with open(self.token_path, "rb") as file:
             return pickle.load(file)
 
     def __save_credentials(self, credentials):
-        with open(".gitignore/token.pkl", "wb") as file:
+        with open(self.token_path, "wb") as file:
             pickle.dump(credentials, file)
+            write_log("authorization token saved in " + self.token_path)
 
     def __google_authentication(self):
-        if self.__is_already_authenticated() is True:
+        if self.is_already_authenticated() is True:
             return self.__load_credentials()
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(".gitignore/client_secret.json", scopes=self.__scopes)
-            flow.run_console(access_type='offline')
-            self.__save_credentials(flow.credentials)
-            return flow.credentials
+            try:
+                write_log("Authorizing the application.")
+                flow = InstalledAppFlow.from_client_secrets_file(config.client_secret_path, scopes=self.__scopes)
+                flow.run_console(access_type='offline')
+                self.__save_credentials(flow.credentials)
+                return flow.credentials
+            except InvalidGrantError:
+                write_log("Invalid authorization code.")
+                exit()
 
     def __create_sevice(self):
         credentials = self.__google_authentication()
@@ -40,15 +51,15 @@ class Calendar:
         return service
 
     def __save_calendar_id(self, id):
-        with open("calendarID.txt", "w") as file:
+        with open(self.calendar_id_path, "w") as file:
             file.write(id)
 
     def __load_calendar_id(self):
-        with open("calendarID.txt", "r") as file:
+        with open(self.calendar_id_path, "r") as file:
             return file.readline().strip()
 
     def __does_calendar_id_file_exist(self):
-        if os.path.isfile("calendarID.txt") is True:
+        if os.path.isfile(self.calendar_id_path) is True:
             return True
         return False
 
@@ -61,6 +72,8 @@ class Calendar:
         created_calendar = service.calendars().insert(body=calendar).execute()
         calendar_id = created_calendar["id"]
         self.__save_calendar_id(calendar_id)
+        write_log("Created new Calendar.", "Calendar-ID: " + calendar_id,
+                  "Calendar-ID has been stored in " + self.calendar_id_path)
         return calendar_id
 
     def __get_calendar_id(self):
@@ -92,16 +105,20 @@ class Calendar:
         }
 
         event = service.events().insert(calendarId=calender_id, body=event).execute()
-        return event["id"]
+        event_id = event["id"]
+        write_log("Event created.", "Event-ID: " + event_id)
+        return event_id
 
     def delete_event(self, event_id):
         service = self.__create_sevice()
         calendar_id = self.__get_calendar_id()
         service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+        write_log("Event deleted.", "Deleted-Event-ID: " + event_id)
 
     def update_event(self, event_id, new_title, new_start_time, new_end_time, new_description):
         self.delete_event(event_id)
-        self.create_event(new_title, new_start_time, new_end_time, new_description)
+        new_event_id = self.create_event(new_title, new_start_time, new_end_time, new_description)
+        return new_event_id
 
     def fetch_events(self):
         calendar_events = []
@@ -119,6 +136,7 @@ class Calendar:
             page_token = events.get('nextPageToken')
             if not page_token:
                 break
+        write_log("Crawling all events from the google calendar.")
         return calendar_events
 
     def turn_into_date_obj(self, date_str):
