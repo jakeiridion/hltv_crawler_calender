@@ -20,10 +20,11 @@ class HLTV_Crawler:
     def __init__(self):
         self.__hltv_url = "https://www.hltv.org/events#tab-ALL"
         self.__join_url = "https://www.hltv.org"
+        self.headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36'}
         self.__timezone = config.timezone
 
     def __fetch_soup(self):
-        r = requests.get(self.__hltv_url)
+        r = requests.get(self.__hltv_url, headers=self.headers)
         soup = BeautifulSoup(r.text, "html.parser")
         return soup
 
@@ -62,7 +63,7 @@ class HLTV_Crawler:
         event_link = urljoin(self.__join_url, event_in_list["href"])
         event_name = table.find_next("div", attrs={"class": "text-ellipsis"}).text
 
-        r = requests.get(event_link)
+        r = requests.get(event_link, headers=self.headers)
         link_soup = BeautifulSoup(r.text, "html.parser")
         event_date_str = link_soup.find("td", attrs={"class": "eventdate"}).text
         start_time, ent_time = self.__turn_into_date_obj(event_date_str)
@@ -72,8 +73,8 @@ class HLTV_Crawler:
     def fetch_ongoing_events(self):
         ongoing_events = []
         soup = self.__fetch_soup()
-
-        for event in soup.find("div", attrs={"id": "ALL"}).find_all_next("a", attrs={"class": "a-reset ongoing-event"}):
+        events = soup.find("div", attrs={"id": "ALL"}).find_all_next("a", attrs={"class": "a-reset ongoing-event"})
+        for event in events:
             ongoing_events.append(self.__fetch_ongoing_event(event))
             sleep(0.5)
         return ongoing_events
