@@ -27,6 +27,7 @@ class Config:
                 raise Exception("A Negative int or zero was set in the SETTINGS.ini file under the wait_between_... "
                                 "section.")
 
+            # raises an exception if the time is over a year = over 31622400 seconds
             if self.wait_between_check > 31622400 or self.wait_between_error > 31622400:
                 raise Exception("The waiting time is over a year. It needs to be under, or 31622400 seconds.")
 
