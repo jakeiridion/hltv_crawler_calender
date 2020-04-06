@@ -1,11 +1,13 @@
 from datetime import datetime
 
 
+# returns the current date
 def __get_date():
     date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return date
 
 
+# Write a entry in the log.txt file
 def write_log(*texts):
     with open("log.txt", "a") as log:
         log.write(__get_date() + ":\n")

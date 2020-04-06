@@ -12,32 +12,43 @@ from dependencies.ConfigReader import config
 class Calendar:
     def __init__(self):
         self.__scopes = ["https://www.googleapis.com/auth/calendar"]
+        self.__calendar_name = config.calendar_name
         self.__timezone = str(config.timezone)
-        self.client_secret_path = config.client_secret_path
-        self.token_path = os.path.join("dependencies", "token.pkl")
-        self.calendar_id_path = os.path.join("dependencies", "calendarID.txt")
+        self.__client_secret_path = config.client_secret_path
+        self.__token_path = os.path.join("dependencies", "token.pkl")
+        self.__calendar_id_path = os.path.join("dependencies", "calendarID.txt")
 
-    def is_already_authenticated(self):
-        if os.path.isfile(self.token_path):
+    # if the token is already saved returns true else returns false
+    def __is_already_authenticated(self):
+        if os.path.isfile(self.__token_path):
             return True
         return False
 
+    # unpickle the token.pkl file
     def __load_credentials(self):
-        with open(self.token_path, "rb") as file:
+        with open(self.__token_path, "rb") as file:
             return pickle.load(file)
 
+    # saves credentials
     def __save_credentials(self, credentials):
-        with open(self.token_path, "wb") as file:
+        with open(self.__token_path, "wb") as file:
             pickle.dump(credentials, file)
-            write_log("authorization token saved in " + self.token_path)
+            write_log("authorization token saved in " + self.__token_path)
+            print("")
+            print("The token has been created. You can now exit the app and run it with:")
+            print("sudo nohup python3 main.py &")
+            print("Or wait until the rest of the calendar was updated")
+            print("Read the log for information on the current process")
+            print("")
 
+    # return the token credentials or creates new ones
     def __google_authentication(self):
-        if self.is_already_authenticated() is True:
+        if self.__is_already_authenticated() is True:
             return self.__load_credentials()
         else:
             try:
                 write_log("Authorizing the application.")
-                flow = InstalledAppFlow.from_client_secrets_file(config.client_secret_path, scopes=self.__scopes)
+                flow = InstalledAppFlow.from_client_secrets_file(self.__client_secret_path, scopes=self.__scopes)
                 flow.run_console(access_type='offline')
                 self.__save_credentials(flow.credentials)
                 return flow.credentials
@@ -45,42 +56,49 @@ class Calendar:
                 write_log("Invalid authorization code.")
                 exit()
 
+    # creates a service with the token
     def __create_sevice(self):
         credentials = self.__google_authentication()
         service = build("calendar", "v3", credentials=credentials)
         return service
 
+    # saves the calendar id in a text file
     def __save_calendar_id(self, id):
-        with open(self.calendar_id_path, "w") as file:
+        with open(self.__calendar_id_path, "w") as file:
             file.write(id)
 
+    # loads the calendar id from the text file
     def __load_calendar_id(self):
-        with open(self.calendar_id_path, "r") as file:
+        with open(self.__calendar_id_path, "r") as file:
             return file.readline().strip()
 
+    # checks if the calendar id file exsists
     def __does_calendar_id_file_exist(self):
-        if os.path.isfile(self.calendar_id_path) is True:
+        if os.path.isfile(self.__calendar_id_path) is True:
             return True
         return False
 
+    # creates a new calendar with the specified timezone and the name HLTV CSGO Events
     def __create_new_calendar(self):
         service = self.__create_sevice()
-        calendar = {
-            'summary': 'HLTV CSGO Events',
+        calendar_body = {
+            'summary': self.__calendar_name,
             'timeZone': self.__timezone
         }
-        created_calendar = service.calendars().insert(body=calendar).execute()
+        created_calendar = service.calendars().insert(body=calendar_body).execute()
         calendar_id = created_calendar["id"]
         self.__save_calendar_id(calendar_id)
         write_log("Created new Calendar.", "Calendar-ID: " + calendar_id,
-                  "Calendar-ID has been stored in " + self.calendar_id_path)
+                  "Calendar-ID has been stored in " + self.__calendar_id_path)
         return calendar_id
 
+    # returns the calendar_id either from the file or from a newly created calendar
     def __get_calendar_id(self):
         if self.__does_calendar_id_file_exist() is True:
             return self.__load_calendar_id()
         return self.__create_new_calendar()
 
+    # creates a new event
     def create_event(self, title, start_time, end_time, description):
         service = self.__create_sevice()
         calender_id = self.__get_calendar_id()
@@ -109,17 +127,20 @@ class Calendar:
         write_log("Event created.", "Event-ID: " + event_id)
         return event_id
 
+    # deletes an event with the event_id
     def delete_event(self, event_id):
         service = self.__create_sevice()
         calendar_id = self.__get_calendar_id()
         service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
         write_log("Event deleted.", "Deleted-Event-ID: " + event_id)
 
+    # this update method first deletes and than creates a new event
     def update_event(self, event_id, new_title, new_start_time, new_end_time, new_description):
         self.delete_event(event_id)
         new_event_id = self.create_event(new_title, new_start_time, new_end_time, new_description)
         return new_event_id
 
+    # fetches all events on the google calendar
     def fetch_events(self):
         calendar_events = []
         page_token = None
@@ -139,6 +160,7 @@ class Calendar:
         write_log("Crawling all events from the google calendar.")
         return calendar_events
 
+    # turns a str into a datetime object
     def turn_into_date_obj(self, date_str):
         return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z")
 

@@ -12,11 +12,13 @@ class Config:
             cfg = configparser.ConfigParser()
             cfg.read(cfg_path)
 
+            self.calendar_name = str(cfg.get("Settings", "calendar_name"))
             self.client_secret_path = str(cfg.get("Settings", "client_secret.json_path"))
             self.timezone = timezone(str(cfg.get("Settings", "timezone")))
             self.wait_between_check = int(cfg.get("Settings", "wait_between_check"))
             self.wait_between_error = int(cfg.get("Settings", "wait_between_error"))
 
+            # raises an exception if the path to the client secret file was entered incorrectly
             if os.path.isfile(self.client_secret_path) is False:
                 raise Exception("No such file or directory: " + self.client_secret_path)
 
